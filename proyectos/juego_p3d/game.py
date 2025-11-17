@@ -5,6 +5,7 @@ from entities.player import Player
 from entities.projectile import ProjectilePool
 from entities.crystal import Crystal
 from entities.barrier import BreakableBarrier
+from entities.powerup import PowerUpObstacle
 
 class Game:
     def __init__(self, base):
@@ -16,13 +17,14 @@ class Game:
         self.handler.addInPattern('%fn-into-%in')
         self.handler.addInPattern('projectile-into-crystal')
         self.handler.addInPattern('projectile-into-barrier')
+        self.handler.addInPattern('projectile-into-powerup')
         self.handler.addInPattern('player-into-barrier')
 
         self.setup_scene()
         self.player = Player(self.base, self.cTrav, self.handler)
         self.player.set_on_hit_barrier_callback(self.on_player_hit_barrier)
         self.projectile_pool = ProjectilePool(self.base, self.cTrav, self.handler)
-        self.player.set_shoot_callback(self.projectile_pool.spawn)
+        self.player.set_shoot_callback(self.shoot_with_ammo_check)
         self.crystals = []
         self.spawn_demo_crystals()
 
@@ -30,15 +32,16 @@ class Game:
         self.crystal_spawn_interval = 3.0
         self.crystal_spawn_y_distance = 20
 
-        self.last_obstacle_spawn = 0
-        self.obstacle_spawn_distance = 10
-        self.obstacles = []
+        self.powerups = []
+        self.last_powerup_spawn = 0
+        self.powerup_spawn_distance = 35
 
         self.barriers = []
         self.last_barrier_spawn = -10
         self.barrier_spawn_distance = 20
 
         self.score = 0
+        self.ammo = 20
         self.game_paused = False
         self.game_over = False
 
@@ -46,61 +49,93 @@ class Game:
 
         self.base.accept('projectile-into-barrier', self.on_projectile_hit_barrier)
 
+        self.base.accept('projectile-into-powerup', self.on_projectile_hit_powerup)
+
         self.base.accept('player-into-barrier', self.player.on_hit_barrier)
 
         self.base.accept('escape', self.toggle_pause)
+
+        # Precargar sonidos del juego
+        self.preload_game_sounds()
 
         self.base.taskMgr.add(self.update, "game-update-task")
 
     def setup_scene(self):
         from panda3d.core import Vec4
-        self.base.setBackgroundColor(Vec4(0.85, 0.88, 0.92, 1))
+        # Cielo celeste brillante
+        self.base.setBackgroundColor(Vec4(0.53, 0.81, 0.98, 1))  # Azul cielo
 
         from panda3d.core import TransparencyAttrib
+        
+        # Crear sol
+        self.create_sun()
+        
+        # Crear nubes animadas
+        self.clouds = []
+        self.create_clouds()
 
+        # Camino/carretera principal
         cm = CardMaker('floor')
-        cm.setFrame(-50, 50, -50, 50)
-        floor = self.base.render.attachNewNode(cm.generate())
-        floor.setPos(0, 100, 0)
-        floor.setHpr(0, -90, 0)
-        floor.setColor(0.65, 0.68, 0.72, 1)
+        cm.setFrame(-50, 50, -100, 100) 
+        self.floor = self.base.render.attachNewNode(cm.generate())
+        self.floor.setPos(0, 0, 0)
+        self.floor.setHpr(0, -90, 0)
+        self.floor.setColor(0.3, 0.3, 0.50, 1) 
+        
+        
+        
+        # Líneas divisorias del camino (amarillas)
+        self.road_lines = []
+        
+        for i in range(-10, 120, 8):  # Líneas cada 8 unidades
+            line = CardMaker(f'road_line_{i}')
+            line.setFrame(-0.15, 0.15, -2, 2)  # Línea discontinua
+            line_node = self.base.render.attachNewNode(line.generate())
+            line_node.setPos(0, i, 0.02)
+            line_node.setHpr(0, -90, 0)
+            line_node.setColor(1, 0.9, 0.2, 1)  # Amarillo
+            self.road_lines.append(line_node)
+        
+        # Bordes del camino (líneas blancas continuas)
+        left_edge = CardMaker('left_edge')
+        left_edge.setFrame(-0.2, 0.2, -100, 100)
+        self.left_edge = self.base.render.attachNewNode(left_edge.generate())
+        self.left_edge.setPos(-6, 0, 0.02)
+        self.left_edge.setHpr(0, -90, 0)
+        self.left_edge.setColor(0.9, 0.9, 0.9, 1)
+        
+        right_edge = CardMaker('right_edge')
+        right_edge.setFrame(-0.2, 0.2, -100, 100)
+        self.right_edge = self.base.render.attachNewNode(right_edge.generate())
+        self.right_edge.setPos(6, 0, 0.02)
+        self.right_edge.setHpr(0, -90, 0)
+        self.right_edge.setColor(0.9, 0.9, 0.9, 1)
 
-        left_wall = CardMaker('left_wall')
-        left_wall.setFrame(0, 500, 0, 10)
-        left = self.base.render.attachNewNode(left_wall.generate())
-        left.setPos(-8, 0, 0)
-        left.setHpr(90, 0, 0)
-        left.setColor(0.55, 0.58, 0.62, 1)
 
-        right_wall = CardMaker('right_wall')
-        right_wall.setFrame(0, 500, 0, 10)
-        right = self.base.render.attachNewNode(right_wall.generate())
-        right.setPos(8, 0, 0)
-        right.setHpr(-90, 0, 0)
-        right.setColor(0.55, 0.58, 0.62, 1)
+        # Paredes laterales con textura de ladrillo a la vista
+        self.create_brick_wall('left')
+        self.create_brick_wall('right')
 
-        ceiling = CardMaker('ceiling')
-        ceiling.setFrame(-8, 8, 0, 500)
-        ceil = self.base.render.attachNewNode(ceiling.generate())
-        ceil.setPos(0, 0, 6)
-        ceil.setP(-90)
-        ceil.setColor(0.6, 0.63, 0.67, 1)
+        # Sin techo para ver el cielo
+        self.ceiling = None
+        
+        # Guarda referencias a las luces para poder limpiarlas después
         ambient = AmbientLight("ambient")
         ambient.setColor((0.75, 0.78, 0.82, 1))
-        ambient_np = self.base.render.attachNewNode(ambient)
-        self.base.render.setLight(ambient_np)
+        self.ambient_np = self.base.render.attachNewNode(ambient)
+        self.base.render.setLight(self.ambient_np)
 
         dlight = DirectionalLight("dlight")
         dlight.setColor((0.9, 0.92, 0.95, 1))
-        dlnp = self.base.render.attachNewNode(dlight)
-        dlnp.setHpr(0, -60, 0)
-        self.base.render.setLight(dlnp)
+        self.dlnp = self.base.render.attachNewNode(dlight)
+        self.dlnp.setHpr(0, -60, 0)
+        self.base.render.setLight(self.dlnp)
 
         dlight2 = DirectionalLight("dlight2")
         dlight2.setColor((0.4, 0.42, 0.45, 1))
-        dlnp2 = self.base.render.attachNewNode(dlight2)
-        dlnp2.setHpr(180, -30, 0)
-        self.base.render.setLight(dlnp2)
+        self.dlnp2 = self.base.render.attachNewNode(dlight2)
+        self.dlnp2.setHpr(180, -30, 0)
+        self.base.render.setLight(self.dlnp2)
 
         self.base.camera.setPos(0, -5, 2)
         self.base.camera.lookAt(0, 20, 2)
@@ -109,6 +144,108 @@ class Game:
 
         print("¡Juego iniciado! Deberías ver la ventana del juego.")
 
+    def preload_game_sounds(self):
+        """Precarga los efectos de sonido del juego"""
+        import os
+        if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+            # Intentar cargar sonido de disparo si existe
+            shoot_sound = os.path.join("sounds", "disparo.wav")
+            if not os.path.exists(shoot_sound):
+                shoot_sound = os.path.join("sounds", "disparo.mp3")
+            
+            if os.path.exists(shoot_sound):
+                self.base.sound_manager.preload_sound('shoot', shoot_sound)
+            else:
+                print("⚠️ Archivo de sonido de disparo no encontrado (disparo.wav o disparo.mp3)")
+            
+            # Intentar cargar sonido de romper fantasma
+            break_sound = os.path.join("sounds", "fantasma_romper.wav")
+            if not os.path.exists(break_sound):
+                break_sound = os.path.join("sounds", "fantasma_romper.mp3")
+            
+            if os.path.exists(break_sound):
+                self.base.sound_manager.preload_sound('crystal_break', break_sound)
+            else:
+                print("⚠️ Archivo de sonido de romper fantasma no encontrado (fantasma_romper.wav o fantasma_romper.mp3)")
+            
+            # Intentar cargar sonido de power-up
+            powerup_sound = os.path.join("sounds", "powerup.wav")
+            if not os.path.exists(powerup_sound):
+                powerup_sound = os.path.join("sounds", "powerup.mp3")
+            
+            if os.path.exists(powerup_sound):
+                self.base.sound_manager.preload_sound('powerup', powerup_sound)
+            else:
+                print("⚠️ Archivo de sonido de power-up no encontrado (powerup.wav o powerup.mp3)")
+
+    def create_brick_wall(self, side):
+        """Crea una pared con textura de ladrillo a la vista simplificada"""
+        x_pos = -8 if side == 'left' else 8
+        hpr = 90 if side == 'left' else -90
+        
+        # Pared base color ladrillo
+        wall = CardMaker(f'{side}_wall')
+        wall.setFrame(-100, 100, 0, 10)
+        wall_node = self.base.render.attachNewNode(wall.generate())
+        wall_node.setPos(x_pos, 0, 0)
+        wall_node.setHpr(hpr, 0, 0)
+        wall_node.setColor(0.65, 0.35, 0.25, 1)  # Color ladrillo rojizo
+        
+        if side == 'left':
+            self.left_wall = wall_node
+            self.left_wall_bricks = []
+        else:
+            self.right_wall = wall_node
+            self.right_wall_bricks = []
+        
+        brick_list = self.left_wall_bricks if side == 'left' else self.right_wall_bricks
+        
+        # Solo líneas horizontales cada 0.6 unidades (juntas entre filas de ladrillos)
+        for z in range(0, 17):
+            line = CardMaker(f'{side}_joint_{z}')
+            line.setFrame(-100, 100, -0.04, 0.04)
+            line_node = self.base.render.attachNewNode(line.generate())
+            line_node.setPos(x_pos, 0, z * 0.6)
+            line_node.setHpr(hpr, 0, 0)
+            line_node.setColor(0.4, 0.3, 0.25, 1)  # Mortero más oscuro
+            brick_list.append(line_node)
+    
+    def create_sun(self):
+        """Crea un sol brillante en el cielo"""
+        from panda3d.core import TransparencyAttrib
+        sun_cm = CardMaker('sun')
+        sun_cm.setFrame(-3, 3, -3, 3)
+        self.sun = self.base.render.attachNewNode(sun_cm.generate())
+        self.sun.setPos(15, 50, 25)  # Posición fija en el cielo
+        self.sun.setColor(1, 0.95, 0.3, 1)  # Amarillo brillante
+        self.sun.setBillboardPointEye()
+        self.sun.setTransparency(TransparencyAttrib.MAlpha)
+    
+    def create_clouds(self):
+        """Crea nubes que se mueven por el cielo"""
+        import random
+        from panda3d.core import TransparencyAttrib
+        
+        # Crear 8 nubes en diferentes posiciones
+        for i in range(8):
+            cloud = CardMaker(f'cloud_{i}')
+            width = random.uniform(4, 7)
+            height = random.uniform(1.5, 2.5)
+            cloud.setFrame(-width/2, width/2, -height/2, height/2)
+            
+            cloud_node = self.base.render.attachNewNode(cloud.generate())
+            x_pos = random.uniform(-20, 20)
+            y_pos = random.uniform(-50, 150)
+            z_pos = random.uniform(15, 30)
+            cloud_node.setPos(x_pos, y_pos, z_pos)
+            cloud_node.setColor(1, 1, 1, 0.8)  # Blanco semi-transparente
+            cloud_node.setBillboardPointEye()
+            cloud_node.setTransparency(TransparencyAttrib.MAlpha)
+            
+            # Velocidad aleatoria para cada nube
+            cloud_speed = random.uniform(2, 5)
+            self.clouds.append({'node': cloud_node, 'speed': cloud_speed, 'start_y': y_pos})
+    
     def setup_ui(self):
         """Configura la interfaz de usuario con instrucciones"""
         from direct.gui.OnscreenText import OnscreenText
@@ -119,8 +256,35 @@ class Game:
         self.crystal_counter = OnscreenText(text="Cristales: 8", pos=(1.2, 0.9), scale=0.06,
                                           fg=(0, 1, 0, 1), align=0, mayChange=True)
 
-        self.score_text = OnscreenText(text="Puntos: 0", pos=(-1.3, 0.8), scale=0.07,
+        self.score_text = OnscreenText(text="Puntuación: 0", pos=(-1.3, 0.8), scale=0.07,
                                       fg=(0, 0.8, 1, 1), align=0, mayChange=True)
+        
+        self.ammo_text = OnscreenText(text="Disparos: 20", pos=(-1.3, 0.65), scale=0.07,
+                                     fg=(1, 0.5, 0, 1), align=0, mayChange=True)
+        
+        # Mensaje temporal de power-up (inicialmente oculto)
+        self.powerup_message = None
+        self.powerup_message_task = None
+
+    def shoot_with_ammo_check(self, origin, direction):
+        """Disparar solo si hay munición disponible y el juego está activo"""
+        # No disparar si el juego está pausado o terminado
+        if self.game_paused or self.game_over:
+            return
+        
+        if self.ammo > 0:
+            self.ammo -= 1
+            self.ammo_text.setText(f"Disparos: {self.ammo}")
+            
+            if self.ammo == 0:
+                self.trigger_game_over()
+            else:
+                self.projectile_pool.spawn(origin, direction)
+                # Reproducir sonido de disparo
+                if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+                    self.base.sound_manager.play_sound('shoot', volume=0.3)
+        else:
+            print("¡Sin munición!")
 
     def spawn_demo_crystals(self):
         positions = [
@@ -133,106 +297,68 @@ class Game:
             c.collider.setPythonTag('crystal_ref', c)
             self.crystals.append(c)
 
-    def spawn_obstacles(self):
-        """Genera obstáculos decorativos (columnas, vigas) para dar contexto"""
+    def spawn_powerups(self):
+        """Genera power-ups que otorgan munición extra"""
         import random
         camera_y = self.base.camera.getY()
 
-        if camera_y > self.last_obstacle_spawn + self.obstacle_spawn_distance:
-            self.last_obstacle_spawn = camera_y
-            spawn_y = camera_y + 30
-
-            obstacle_type = random.choice(['columns', 'beam', 'arch', 'pillars'])
-
-            if obstacle_type == 'columns':
-                self.create_column(-6, spawn_y, random.choice([4, 5, 6]))
-                self.create_column(6, spawn_y, random.choice([4, 5, 6]))
-
-            elif obstacle_type == 'beam':
-                self.create_beam(spawn_y, 5)
-
-            elif obstacle_type == 'arch':
-                self.create_arch(spawn_y)
-
-            elif obstacle_type == 'pillars':
-                for _ in range(random.randint(2, 3)):
-                    x = random.choice([-7, -6, 6, 7])
-                    z = random.uniform(0.5, 2)
-                    self.create_pillar(x, spawn_y + random.uniform(0, 5), z)
+        if camera_y > self.last_powerup_spawn + self.powerup_spawn_distance:
+            self.last_powerup_spawn = camera_y
+            spawn_y = camera_y + 40
+            
+            # Posición aleatoria en X (evitar los bordes)
+            x_pos = random.uniform(-6, 6)
+            z_pos = random.uniform(1, 4)
+            
+            # Crear power-up con bonus aleatorio de munición
+            ammo_bonus = random.choice([3, 5, 7])
+            powerup = PowerUpObstacle(
+                self.base,
+                (x_pos, spawn_y, z_pos),
+                self.cTrav,
+                self.handler,
+                ammo_bonus=ammo_bonus
+            )
+            
+            # Agregar al traverser para detectar colisiones
+            self.cTrav.addCollider(powerup.collider, self.handler)
+            
+            self.powerups.append(powerup)
+            print(f"✨ Power-up generado en Y={spawn_y} con +{ammo_bonus} disparos")
+            print(f"   Collider mask: {powerup.collider.node().getIntoCollideMask()}")
 
     def create_column(self, x, y, height):
-        """Crear una columna vertical"""
-        from panda3d.core import CardMaker
-
-        cm = CardMaker('column')
-        cm.setFrame(-0.3, 0.3, 0, height)
-        column = self.base.render.attachNewNode(cm.generate())
-        column.setPos(x, y, 0)
-        column.setColor(0.45, 0.48, 0.52, 1)
-        column.setBillboardPointEye()
-
-        self.obstacles.append(column)
-
-    def create_beam(self, y, z):
-        """Crear una viga horizontal"""
-        from panda3d.core import CardMaker
-
-        cm = CardMaker('beam')
-        cm.setFrame(-8, 8, -0.3, 0.3)
-        beam = self.base.render.attachNewNode(cm.generate())
-        beam.setPos(0, y, z)
-        beam.setP(-90)
-        beam.setColor(0.4, 0.43, 0.47, 1)
-
-        self.obstacles.append(beam)
-
-    def create_arch(self, y):
-        """Crear un arco decorativo"""
-        from panda3d.core import CardMaker
-
-        for x in [-5, 5]:
-            cm = CardMaker('arch_pillar')
-            cm.setFrame(-0.4, 0.4, 0, 4)
-            pillar = self.base.render.attachNewNode(cm.generate())
-            pillar.setPos(x, y, 0)
-            pillar.setColor(0.42, 0.45, 0.5, 1)
-            pillar.setBillboardPointEye()
-            self.obstacles.append(pillar)
-
-        cm = CardMaker('arch_top')
-        cm.setFrame(-5, 5, -0.3, 0.3)
-        top = self.base.render.attachNewNode(cm.generate())
-        top.setPos(0, y, 4)
-        top.setP(-90)
-        top.setColor(0.42, 0.45, 0.5, 1)
-        self.obstacles.append(top)
-
-    def create_pillar(self, x, y, z):
-        """Crear un pilar decorativo pequeño"""
-        from panda3d.core import CardMaker
-
-        cm = CardMaker('pillar')
-        cm.setFrame(-0.2, 0.2, -0.2, 0.2)
-        pillar = self.base.render.attachNewNode(cm.generate())
-        pillar.setPos(x, y, z)
-        pillar.setColor(0.38, 0.41, 0.46, 1)
-        pillar.setBillboardPointEye()
-
-        self.obstacles.append(pillar)
-
-    def cleanup_old_obstacles(self):
-        """Eliminar obstáculos que están muy atrás"""
+        """Elimina power-ups que están muy atrás"""
         camera_y = self.base.camera.getY()
-        obstacles_to_remove = []
+        powerups_to_remove = []
 
-        for obstacle in self.obstacles:
-            if obstacle.getY() < camera_y - 50:
-                obstacle.removeNode()
-                obstacles_to_remove.append(obstacle)
+        for powerup in self.powerups:
+            if powerup.pos.y < camera_y - 50:
+                powerup.cleanup()
+                powerups_to_remove.append(powerup)
 
-        for obstacle in obstacles_to_remove:
-            self.obstacles.remove(obstacle)
+        for powerup in powerups_to_remove:
+            self.powerups.remove(powerup)
 
+    def spawn_pattern_gauntlet(self, start_y):
+        """Patrón desafío: múltiples barreras seguidas con cristales"""
+        from entities.barrier import BreakableBarrier
+    
+        for i in range(3):
+            barrier = BreakableBarrier(
+                self.base,
+                (0, start_y + i * 10, 2),
+                self.cTrav,
+                self.handler
+            )
+            self.barriers.append(barrier)
+
+        for x in [-3, 3]:
+            c = Crystal(self.base, (x, start_y + i * 10 - 3, 2), self.cTrav, self.handler)
+            c.node.setPythonTag('crystal_ref', c)
+            c.collider.setPythonTag('crystal_ref', c)
+            self.crystals.append(c)
+            
     def spawn_barriers(self):
         """Genera barriers (obstáculos rompibles) que deben destruirse para avanzar"""
         import random
@@ -264,13 +390,26 @@ class Game:
                 if not barrier.broken:
                     self.score = max(0, self.score - 10)
                     self.score_text.setText(f"Puntos: {self.score}")
-                    print(f"❌ Barrier no roto! Puntos: {self.score}")
+                    print(f"❌ Colisión detectada. Puntos: {self.score}")
 
                 barrier.cleanup()
                 barriers_to_remove.append(barrier)
 
         for barrier in barriers_to_remove:
             self.barriers.remove(barrier)
+
+    def cleanup_old_powerups(self):
+        """Eliminar power-ups que están muy atrás"""
+        camera_y = self.base.camera.getY()
+        powerups_to_remove = []
+
+        for powerup in self.powerups:
+            if powerup.pos.y < camera_y - 50:
+                powerup.cleanup()
+                powerups_to_remove.append(powerup)
+
+        for powerup in powerups_to_remove:
+            self.powerups.remove(powerup)
 
     def spawn_new_crystals(self):
         """Genera nuevos cristales adelante de la cámara - máximo 2 cada 3 segundos"""
@@ -300,29 +439,79 @@ class Game:
         self.game_paused = not self.game_paused
 
         if self.game_paused:
+            # Pausar música
+            if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+                if hasattr(self.base.sound_manager, 'music') and self.base.sound_manager.music:
+                    self.base.sound_manager.music.stop()
+            
             from direct.gui.OnscreenText import OnscreenText
-            self.pause_text = OnscreenText(
-                text="PAUSA\n\nESC = Continuar\nQ = Salir",
-                pos=(0, 0), scale=0.12,
-                fg=(0, 0.8, 1, 1), align=1,
-                mayChange=False
-            )
-            self.pause_bg = OnscreenText(
+            from direct.gui.DirectGui import DirectFrame
+            
+            # Fondo oscuro semi-transparente (pantalla completa)
+            self.pause_overlay = OnscreenText(
                 text="", pos=(0, 0), scale=10,
-                fg=(0, 0, 0, 0.7), align=1,
+                fg=(0, 0, 0, 0.6), align=1,
                 mayChange=False
             )
+            
+            # Panel/Ventana de pausa (recuadro)
+            self.pause_panel = DirectFrame(
+                frameColor=(0.1, 0.15, 0.2, 0.95),  # Azul oscuro casi opaco
+                frameSize=(-1.2, 1.2, -0.6, 0.6),
+                pos=(0, 0, 0)
+            )
+            
+            # Borde del panel
+            self.pause_border = DirectFrame(
+                frameColor=(0, 0.8, 1, 1),  # Celeste brillante
+                frameSize=(-1.25, 1.25, -0.65, 0.65),
+                pos=(0, 0, 0)
+            )
+            self.pause_border.reparentTo(self.pause_panel)
+            self.pause_border.setBin('fixed', 0)
+            self.pause_panel.setBin('fixed', 1)
+            
+            # Título
+            self.pause_title = OnscreenText(
+                text="JUEGO PAUSADO",
+                pos=(0, 0.35), scale=0.15,
+                fg=(1, 1, 0, 1), align=2,
+                mayChange=False,
+                parent=self.pause_panel
+            )
+            
+            # Texto de instrucciones
+            self.pause_text = OnscreenText(
+                text="ESC = Continuar\nQ = Salir al Menú",
+                pos=(0, -0.15), scale=0.09,
+                fg=(0.9, 0.9, 0.9, 1), align=2,
+                mayChange=False,
+                parent=self.pause_panel
+            )
+            
             self.base.accept('q', self.quit_game)
         else:
+            # Reanudar música
+            if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+                if hasattr(self.base.sound_manager, 'music') and self.base.sound_manager.music:
+                    self.base.sound_manager.music.play()
+            
+            if hasattr(self, 'pause_overlay'):
+                self.pause_overlay.destroy()
+            if hasattr(self, 'pause_panel'):
+                self.pause_panel.destroy()
+            if hasattr(self, 'pause_border'):
+                self.pause_border.destroy()
+            if hasattr(self, 'pause_title'):
+                self.pause_title.destroy()
             if hasattr(self, 'pause_text'):
                 self.pause_text.destroy()
-                self.pause_bg.destroy()
             self.base.ignore('q')
 
     def quit_game(self):
-        """Salir del juego"""
-        import sys
-        sys.exit()
+        """Volver al menú principal"""
+        self.cleanup()
+        self.base.return_to_menu()
 
     def cleanup(self):
         """Limpiar recursos del juego"""
@@ -331,27 +520,108 @@ class Game:
                 crystal.node.removeNode()
         self.crystals.clear()
 
-        for obstacle in self.obstacles:
-            if obstacle:
-                obstacle.removeNode()
-        self.obstacles.clear()
+        # Limpiar power-ups
+        for powerup in self.powerups:
+            if powerup:
+                powerup.cleanup()
+        self.powerups.clear()
 
         if hasattr(self, 'projectile_pool'):
             for proj in self.projectile_pool.pool:
                 if hasattr(proj, 'node') and proj.node:
                     proj.node.removeNode()
 
+        # Limpiar luces - IMPORTANTE: clearLight antes de removeNode
+        if hasattr(self, 'ambient_np') and self.ambient_np:
+            self.base.render.clearLight(self.ambient_np)
+            self.ambient_np.removeNode()
+            self.ambient_np = None
+        if hasattr(self, 'dlnp') and self.dlnp:
+            self.base.render.clearLight(self.dlnp)
+            self.dlnp.removeNode()
+            self.dlnp = None
+        if hasattr(self, 'dlnp2') and self.dlnp2:
+            self.base.render.clearLight(self.dlnp2)
+            self.dlnp2.removeNode()
+            self.dlnp2 = None
+
+        # Limpiar geometría de la escena
+        if hasattr(self, 'floor') and self.floor:
+            self.floor.removeNode()
+            self.floor = None
+        if hasattr(self, 'road_lines'):
+            for line in self.road_lines:
+                if line:
+                    line.removeNode()
+            self.road_lines.clear()
+        if hasattr(self, 'left_edge') and self.left_edge:
+            self.left_edge.removeNode()
+            self.left_edge = None
+        if hasattr(self, 'right_edge') and self.right_edge:
+            self.right_edge.removeNode()
+            self.right_edge = None
+        if hasattr(self, 'left_wall') and self.left_wall:
+            self.left_wall.removeNode()
+            self.left_wall = None
+        if hasattr(self, 'left_wall_bricks'):
+            for brick in self.left_wall_bricks:
+                if brick:
+                    brick.removeNode()
+            self.left_wall_bricks.clear()
+        if hasattr(self, 'right_wall') and self.right_wall:
+            self.right_wall.removeNode()
+            self.right_wall = None
+        if hasattr(self, 'right_wall_bricks'):
+            for brick in self.right_wall_bricks:
+                if brick:
+                    brick.removeNode()
+            self.right_wall_bricks.clear()
+        if hasattr(self, 'ceiling') and self.ceiling:
+            self.ceiling.removeNode()
+            self.ceiling = None
+        
+        # Limpiar sol y nubes
+        if hasattr(self, 'sun') and self.sun:
+            self.sun.removeNode()
+            self.sun = None
+        if hasattr(self, 'clouds'):
+            for cloud_data in self.clouds:
+                if cloud_data['node']:
+                    cloud_data['node'].removeNode()
+            self.clouds.clear()
+
         if hasattr(self, 'crystal_counter'):
             self.crystal_counter.destroy()
         if hasattr(self, 'score_text'):
             self.score_text.destroy()
+        if hasattr(self, 'ammo_text'):
+            self.ammo_text.destroy()
+        if hasattr(self, 'powerup_message') and self.powerup_message:
+            self.powerup_message.destroy()
+        if hasattr(self, 'powerup_message_task') and self.powerup_message_task:
+            self.base.taskMgr.remove(self.powerup_message_task)
+        
+        # Limpiar elementos de pausa
+        if hasattr(self, 'pause_overlay'):
+            self.pause_overlay.destroy()
+        if hasattr(self, 'pause_panel'):
+            self.pause_panel.destroy()
+        if hasattr(self, 'pause_border'):
+            self.pause_border.destroy()
+        if hasattr(self, 'pause_title'):
+            self.pause_title.destroy()
         if hasattr(self, 'pause_text'):
             self.pause_text.destroy()
-            self.pause_bg.destroy()
 
     def trigger_game_over(self):
-        """Activar game over"""
+        """Activa game over"""
         self.game_over = True
+        
+        # Pausar música
+        if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+            if hasattr(self.base.sound_manager, 'music') and self.base.sound_manager.music:
+                self.base.sound_manager.music.stop()
+        
         self.base.show_game_over(self.score)
 
     def cleanup_old_crystals(self):
@@ -385,10 +655,15 @@ class Game:
             print("Desactivando proyectil")
             proj.deactivate()
         if crystal and not crystal.broken:
-            print("Rompiendo cristal - ¡+10 puntos!")
+            print("Rompiendo cristal - ¡+10 puntos! +1 munición")
             crystal.break_apart()
+            # Reproducir sonido de romper fantasma
+            if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+                self.base.sound_manager.play_sound('crystal_break', volume=0.4)
             self.score += 10
+            self.ammo += 1
             self.score_text.setText(f"Puntos: {self.score}")
+            self.ammo_text.setText(f"Disparos: {self.ammo}")
 
     def on_projectile_hit_barrier(self, entry):
         """Maneja colisión entre proyectil y barrier"""
@@ -406,10 +681,76 @@ class Game:
             proj.deactivate()
 
         if barrier and not barrier.broken:
-            print("¡Barrier roto! +5 puntos")
+            print("¡Objetivo roto! +3 disparos")
             barrier.break_apart()
-            self.score += 5
+            self.ammo += 3
+            self.ammo_text.setText(f"Disparos: {self.ammo}")
+
+    def on_projectile_hit_powerup(self, entry):
+        """Maneja colisión entre proyectil y power-up"""
+        print("🎯 COLISIÓN DETECTADA CON POWER-UP!")
+        try:
+            from_np = entry.getFromNodePath().getParent()
+            into_np = entry.getIntoNodePath().getParent()
+            print(f"   From: {from_np}, Into: {into_np}")
+        except Exception as e:
+            print(f"❌ Error obteniendo nodos: {e}")
+            return
+
+        proj = from_np.getPythonTag('projectile_ref')
+        powerup = into_np.getPythonTag('powerup_ref')
+        
+        print(f"   Projectile ref: {proj}")
+        print(f"   PowerUp ref: {powerup}")
+
+        if proj:
+            print("   ✅ Desactivando proyectil")
+            proj.deactivate()
+
+        if powerup and not powerup.destroyed:
+            print(f"   💥 ¡Power-Up destruido! +{powerup.ammo_bonus} munición")
+            powerup.destroy()
+            # Reproducir sonido de power-up
+            if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
+                self.base.sound_manager.play_sound('powerup', volume=0.5)
+            self.ammo += powerup.ammo_bonus
+            self.score += 15
             self.score_text.setText(f"Puntos: {self.score}")
+            self.ammo_text.setText(f"Disparos: {self.ammo}")
+            
+            # Mostrar mensaje temporal
+            self.show_powerup_message(f"+{powerup.ammo_bonus} DISPAROS!")
+
+    def show_powerup_message(self, message):
+        """Muestra un mensaje temporal en pantalla cuando se recoge un power-up"""
+        from direct.gui.OnscreenText import OnscreenText
+        
+        # Limpiar mensaje anterior si existe
+        if self.powerup_message:
+            self.powerup_message.destroy()
+        if self.powerup_message_task:
+            self.base.taskMgr.remove(self.powerup_message_task)
+        
+        # Crear nuevo mensaje
+        self.powerup_message = OnscreenText(
+            text=message,
+            pos=(0, 0.3),
+            scale=0.15,
+            fg=(1, 0.9, 0.2, 1),
+            shadow=(0, 0, 0, 1),
+            align=2
+        )
+        
+        # Programar que desaparezca después de 2 segundos
+        def hide_message(task):
+            if self.powerup_message:
+                self.powerup_message.destroy()
+                self.powerup_message = None
+            return Task.done
+        
+        self.powerup_message_task = self.base.taskMgr.doMethodLater(
+            2.0, hide_message, 'hide-powerup-message'
+        )
 
     def on_player_hit_barrier(self):
         print("DEBUG: on_player_hit_barrier() called in game.py!")
@@ -433,19 +774,49 @@ class Game:
 
         self.base.camera.setY(self.base.camera, self.speed * dt)
 
+        # Mantener paredes laterales alineadas con la cámara
+        camera_y = self.base.camera.getY()
+        self.left_wall.setY(camera_y)
+        self.right_wall.setY(camera_y)
+        
+        # Mantener ladrillos alineados con las paredes
+        for brick in self.left_wall_bricks:
+            brick.setY(camera_y)
+        for brick in self.right_wall_bricks:
+            brick.setY(camera_y)
+        
+        # Mantener el piso/camino alineado con la cámara
+        self.floor.setY(camera_y)
+        self.left_edge.setY(camera_y)
+        self.right_edge.setY(camera_y)
+        
+        # Animar las líneas del camino para efecto de movimiento
+        for line in self.road_lines:
+            line.setY(camera_y + (line.getY() - camera_y) % 16 - 8)
+        
+        # Animar nubes
+        for cloud_data in self.clouds:
+            cloud = cloud_data['node']
+            speed = cloud_data['speed']
+            # Mover nube hacia adelante
+            cloud.setY(cloud.getY() + speed * dt)
+            # Si la nube se aleja mucho, reposicionarla atrás
+            if cloud.getY() > camera_y + 100:
+                cloud.setY(camera_y - 50)
+
         self.projectile_pool.update_all(dt)
 
         self.spawn_new_crystals()
 
         self.spawn_barriers()
 
-        self.spawn_obstacles()
+        self.spawn_powerups()
 
         self.cleanup_old_crystals()
 
         self.cleanup_old_barriers()
 
-        self.cleanup_old_obstacles()
+        self.cleanup_old_powerups()
 
         active_crystals = sum(1 for c in self.crystals if not c.broken)
         self.crystal_counter.setText(f"Cristales: {active_crystals}")
