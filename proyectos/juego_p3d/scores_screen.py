@@ -203,7 +203,7 @@ class ScoresScreen:
         self.background.setPos(0, 0, 0)
         
         try:
-            tex = self.base.loader.loadTexture("fondo_main.png")
+            tex = self.base.loader.loadTexture("images/fondo_main.png")
             self.background.setTexture(tex)
             self.background.setTransparency(TransparencyAttrib.MAlpha)
         except:

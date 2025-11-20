@@ -21,7 +21,7 @@ class Projectile:
             from panda3d.core import Filename, Texture as PandaTexture
 
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            image_path = os.path.join(project_dir, "projectile.png")
+            image_path = os.path.join(project_dir, "images", "projectile.png")
 
             if os.path.exists(image_path):
                 panda_filename = Filename.fromOsSpecific(image_path)

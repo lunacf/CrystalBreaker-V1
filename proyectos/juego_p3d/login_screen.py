@@ -114,11 +114,11 @@ class LoginScreen:
         self.background.setPos(0, 0, 0)
         
         try:
-            texture = self.base.loader.loadTexture("fondo_main.png")
+            texture = self.base.loader.loadTexture("images/fondo_main.png")
             self.background.setTexture(texture)
             self.background.setTransparency(TransparencyAttrib.MAlpha)
         except:
-            print("Advertencia: No se encontró 'fondo_login.png', usando color sólido")
+            print("Advertencia: No se encontró imagen de fondo, usando color sólido")
             self.background.setColor(0.05, 0.05, 0.15, 1)
         
         self.background.setBin('background', 0)

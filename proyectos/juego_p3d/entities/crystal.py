@@ -21,7 +21,7 @@ class Crystal:
         
         try:
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            image_path = os.path.join(project_dir, "fantasma.png")
+            image_path = os.path.join(project_dir, "images", "fantasma.png")
             
             if os.path.exists(image_path):
                 from panda3d.core import Filename
@@ -112,7 +112,7 @@ class Crystal:
             # Intentar cargar textura del fantasma para los fragmentos
             try:
                 project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                image_path = os.path.join(project_dir, "fantasma.png")
+                image_path = os.path.join(project_dir, "images", "fantasma.png")
                 if os.path.exists(image_path):
                     tex = self.base.loader.loadTexture(Filename.fromOsSpecific(image_path))
                     shard.setTexture(tex)
