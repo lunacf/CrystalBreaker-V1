@@ -1,6 +1,6 @@
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectButton
-from panda3d.core import TextNode, Vec4
+from panda3d.core import TextNode, Vec4, CardMaker, TransparencyAttrib
 
 class MainMenu:
     def __init__(self, base, user_manager, start_game_callback):
@@ -8,7 +8,7 @@ class MainMenu:
         self.user_manager = user_manager
         self.start_game_callback = start_game_callback
 
-        self.base.setBackgroundColor(Vec4(0.05, 0.05, 0.15, 1))
+        self.create_background()
 
         self.title = OnscreenText(
             text="Crystal Breaker - CABJ Edition",
@@ -18,7 +18,6 @@ class MainMenu:
             align=TextNode.ACenter
         )
         
-        # Mostrar usuario logueado
         current_user = user_manager.get_current_user()
         self.user_text = OnscreenText(
             text=f"Jugador: {current_user}",
@@ -27,7 +26,6 @@ class MainMenu:
             align=TextNode.ACenter
         )
         
-        # Mostrar mejor puntuación
         best_score = user_manager.get_user_best_score()
         stats = user_manager.get_user_stats()
         self.stats_text = OnscreenText(
@@ -37,7 +35,6 @@ class MainMenu:
             align=TextNode.ACenter
         )
 
-        # Botón Jugar
         self.start_button = DirectButton(
             text="JUGAR",
             scale=0.08,
@@ -48,7 +45,6 @@ class MainMenu:
             relief=1
         )
         
-        # Botón Ver Puntuaciones
         self.scores_button = DirectButton(
             text="VER PUNTUACIONES",
             scale=0.06,
@@ -59,7 +55,6 @@ class MainMenu:
             relief=1
         )
         
-        # Botón Cerrar Sesión
         self.logout_button = DirectButton(
             text="CERRAR SESIÓN",
             scale=0.06,
@@ -82,8 +77,25 @@ class MainMenu:
         self.base.accept('enter', self.on_start_click)
         self.base.accept('space', self.on_start_click)
 
+    def create_background(self):
+        """Crea fondo del menú"""
+        cm = CardMaker('menu_background')
+        cm.setFrame(-2, 2, -1.5, 1.5)
+        self.background = self.base.aspect2d.attachNewNode(cm.generate())
+        self.background.setScale(2.5)
+        self.background.setPos(0, 0, 0)
+        
+        try:
+            tex = self.base.loader.loadTexture("fondo_main.png")
+            self.background.setTexture(tex)
+            self.background.setTransparency(TransparencyAttrib.MAlpha)
+        except:
+            self.base.setBackgroundColor(Vec4(0.05, 0.05, 0.15, 1))
+        
+        self.background.setBin('background', 0)
+
     def on_start_click(self):
-        """Cuando se hace clic en iniciar"""
+        """Inicia el juego"""
         self.hide()
         self.start_game_callback()
     
@@ -114,11 +126,15 @@ class MainMenu:
         self.scores_button.destroy()
         self.logout_button.destroy()
         self.instructions.destroy()
+        if hasattr(self, 'background'):
+            self.background.removeNode()
         self.base.ignore('enter')
         self.base.ignore('space')
 
 class GameOverScreen:
     def __init__(self, base, score, user_manager, restart_callback):
+        from direct.gui.DirectGui import DirectFrame
+        
         self.base = base
         self.user_manager = user_manager
         self.restart_callback = restart_callback
@@ -126,27 +142,42 @@ class GameOverScreen:
         self.bg = OnscreenText(
             text="",
             pos=(0, 0), scale=10,
-            fg=(0, 0, 0, 0.8),
+            fg=(0, 0, 0, 0.6),
             align=2
         )
+
+        self.panel = DirectFrame(
+            frameColor=(0.15, 0.05, 0.05, 0.95),
+            frameSize=(-1.2, 1.2, -0.7, 0.7),
+            pos=(0, 0, 0)
+        )
+        
+        self.border = DirectFrame(
+            frameColor=(1, 0.2, 0.2, 1),
+            frameSize=(-1.25, 1.25, -0.75, 0.75),
+            pos=(0, 0, 0)
+        )
+        self.border.reparentTo(self.panel)
+        self.border.setBin('fixed', 0)
+        self.panel.setBin('fixed', 1)
 
         self.game_over_text = OnscreenText(
             text="GAME OVER",
-            pos=(0, 0.5), scale=0.15,
+            pos=(0, 0.45), scale=0.15,
             fg=(1, 0.2, 0.2, 1),
             shadow=(0, 0, 0, 1),
-            align=2
+            align=2,
+            parent=self.panel
         )
 
-        # Puntuación actual
         self.score_text = OnscreenText(
             text=f"Puntuación: {score}",
-            pos=(0, 0.3), scale=0.1,
+            pos=(0, 0.25), scale=0.1,
             fg=(1, 1, 0, 1),
-            align=2
+            align=2,
+            parent=self.panel
         )
         
-        # Comparar con mejor puntuación
         best_score = user_manager.get_user_best_score()
         if score > best_score:
             record_text = "¡NUEVO RÉCORD!"
@@ -160,19 +191,21 @@ class GameOverScreen:
         
         self.record_text = OnscreenText(
             text=record_text,
-            pos=(0, 0.15), scale=0.08,
+            pos=(0, 0.1), scale=0.08,
             fg=record_color,
-            align=2
+            align=2,
+            parent=self.panel
         )
 
         self.restart_button = DirectButton(
             text="REINTENTAR",
             scale=0.08,
-            pos=(0, 0, -0.2),
+            pos=(0, 0, -0.15),
             command=self.on_restart_click,
             frameColor=(0.2, 0.8, 0.2, 0.8),
             text_fg=(1, 1, 1, 1),
-            relief=1
+            relief=1,
+            parent=self.panel
         )
 
         self.menu_button = DirectButton(
@@ -182,14 +215,16 @@ class GameOverScreen:
             command=self.return_to_menu,
             frameColor=(0.8, 0.2, 0.2, 0.8),
             text_fg=(1, 1, 1, 1),
-            relief=1
+            relief=1,
+            parent=self.panel
         )
 
         self.instructions = OnscreenText(
-            text="Presiona ENTER para reintentar\nPresiona Q para volver al menú",
-            pos=(0, -0.5), scale=0.06,
-            fg=(0.8, 0.8, 0.8, 1),
-            align=2
+            text="ENTER = Reintentar | Q = Menú",
+            pos=(0, -0.55), scale=0.06,
+            fg=(0.9, 0.9, 0.9, 1),
+            align=2,
+            parent=self.panel
         )
 
         self.base.accept('enter', self.on_restart_click)
@@ -208,6 +243,8 @@ class GameOverScreen:
     def hide(self):
         """Ocultar la pantalla de game over"""
         self.bg.destroy()
+        self.panel.destroy()
+        self.border.destroy()
         self.game_over_text.destroy()
         self.score_text.destroy()
         self.record_text.destroy()

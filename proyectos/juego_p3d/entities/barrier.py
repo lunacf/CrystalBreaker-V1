@@ -6,7 +6,7 @@ from direct.interval.LerpInterval import LerpHprInterval
 import random
 
 class BreakableBarrier:
-    """Obstáculo rectangular 3D que rota y se puede romper para avanzar"""
+    """Obstáculo rectangular 3D rotatorio que se rompe al impactar"""
 
     def __init__(self, base, position, cTrav, handler):
         self.base = base
@@ -15,17 +15,11 @@ class BreakableBarrier:
         self.pos = Point3(*position)
         self.broken = False
 
-        # Crear nodo contenedor
         self.node = base.render.attachNewNode("barrier_container")
         self.node.setPos(self.pos)
-
-        # Crear forma 3D con múltiples caras (barra 3D)
         self.create_3d_barrier()
-
-        # Color azul Boca
         self.node.setColor(0.0, 0.2, 0.6, 1.0)
 
-        # Configurar colisión
         cnode = CollisionNode('barrier')
         cnode.addSolid(CollisionSphere(0, 0, 0, 8.5))
         cnode.setFromCollideMask(BitMask32.allOff())
@@ -37,7 +31,6 @@ class BreakableBarrier:
 
         self.cTrav.addCollider(self.collider, handler)
 
-        # Animación de rotación continua
         self.rotation_interval = LerpHprInterval(
             self.node,
             duration=4.0,
@@ -47,35 +40,30 @@ class BreakableBarrier:
         self.rotation_interval.loop()
 
     def create_3d_barrier(self):
-        """Crea una barra 3D con múltiples caras"""
-        # Cara frontal
+        """Crea barra 3D con 6 caras"""
         cm_front = CardMaker("barrier_front")
         cm_front.setFrame(-8, 8, -1, 1)
         front = self.node.attachNewNode(cm_front.generate())
         front.setPos(0, 0.5, 0)
         
-        # Cara trasera
         cm_back = CardMaker("barrier_back")
         cm_back.setFrame(-8, 8, -1, 1)
         back = self.node.attachNewNode(cm_back.generate())
         back.setPos(0, -0.5, 0)
         back.setH(180)
         
-        # Cara superior
         cm_top = CardMaker("barrier_top")
         cm_top.setFrame(-8, 8, -1, 1)
         top = self.node.attachNewNode(cm_top.generate())
         top.setPos(0, 0, 1)
         top.setP(-90)
         
-        # Cara inferior
         cm_bottom = CardMaker("barrier_bottom")
         cm_bottom.setFrame(-8, 8, -1, 1)
         bottom = self.node.attachNewNode(cm_bottom.generate())
         bottom.setPos(0, 0, -1)
         bottom.setP(90)
         
-        # Lados
         cm_left = CardMaker("barrier_left")
         cm_left.setFrame(-1, 1, -1, 1)
         left = self.node.attachNewNode(cm_left.generate())
@@ -111,7 +99,7 @@ class BreakableBarrier:
         from direct.interval.IntervalGlobal import Sequence, LerpPosInterval, LerpHprInterval, Parallel, Func
 
         for i, (dx, dy, dz) in enumerate(positions):
-            # Crear fragmentos 3D más pequeños
+            # Crea fragmentos 3D más pequeños
             cm = CardMaker(f"barrier_shard_{i}")
             cm.setFrame(-1.8, 1.8, -0.8, 0.8)
             frag = self.base.render.attachNewNode(cm.generate())

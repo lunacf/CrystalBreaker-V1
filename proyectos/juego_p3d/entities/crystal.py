@@ -11,7 +11,6 @@ class Crystal:
         self.pos = Point3(*position_tuple)
         self.broken = False
 
-        # Crear sprite con imagen de fantasma
         cm = CardMaker('crystal_card')
         cm.setFrame(-0.8, 0.8, -0.8, 0.8)
         
@@ -20,7 +19,6 @@ class Crystal:
         
         crystal_np = self.node.attachNewNode(cm.generate())
         
-        # Carga textura del fantasma
         try:
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             image_path = os.path.join(project_dir, "fantasma.png")
@@ -30,15 +28,12 @@ class Crystal:
                 tex = base.loader.loadTexture(Filename.fromOsSpecific(image_path))
                 crystal_np.setTexture(tex)
                 crystal_np.setTransparency(TransparencyAttrib.MAlpha)
-                print(f"✅ Textura fantasma cargada para cristal")
             else:
-                print(f"⚠️ No se encontró fantasma.png en {image_path}")
                 crystal_np.setColor(0.3, 0.7, 0.95, 0.75)
         except Exception as e:
-            print(f"❌ Error cargando textura fantasma: {e}")
+            print(f"Error cargando textura: {e}")
             crystal_np.setColor(0.3, 0.7, 0.95, 0.75)
         
-        # Hace que siempre mire a la cámara
         crystal_np.setBillboardPointEye()
         
         cnode = CollisionNode('crystal')
@@ -49,31 +44,25 @@ class Crystal:
         if cTrav is not None and coll_handler is not None:
             cTrav.addCollider(self.collider, coll_handler)
         
-        # Agregar movimiento aleatorio al fantasma
         self.start_movement()
 
     def start_movement(self):
-        """Inicia el movimiento del fantasma"""
+        """Inicia movimiento del fantasma"""
         import random
         from direct.interval.LerpInterval import LerpPosInterval, LerpHprInterval
         from direct.interval.MetaInterval import Sequence, Parallel
         
-        # Movimiento lateral (izquierda-derecha)
         current_x = self.pos.getX()
         direction = random.choice([-1, 1])
         distance = random.uniform(1.5, 3.0)
         target_x = current_x + (direction * distance)
-        
-        # Limitar para que no se salga del área de juego
         target_x = max(-6, min(6, target_x))
         
-        # Movimiento vertical (arriba-abajo)
         current_z = self.pos.getZ()
         z_offset = random.uniform(-0.5, 0.5)
         target_z = current_z + z_offset
         target_z = max(1.0, min(5.0, target_z))
         
-        # Crear movimiento de ida
         duration = random.uniform(2.0, 3.5)
         move_to = LerpPosInterval(
             self.node,

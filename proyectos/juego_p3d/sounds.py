@@ -13,11 +13,8 @@ class SoundManager:
                 self.music.setLoop(loop)
                 self.music.setVolume(volume)
                 self.music.play()
-                print(f"✅ Música cargada: {file_path}")
-            else:
-                print(f"❌ No se pudo cargar la música: {file_path}")
-        except Exception as e:
-            print(f"❌ Error al cargar música: {e}")
+        except Exception:
+            pass
     
     def stop_music(self):
         if self.music:
@@ -28,25 +25,23 @@ class SoundManager:
             self.music.setVolume(volume)
     
     def play_sound(self, name, file_path=None, volume=1.0):
-        """Reproduce un efecto de sonido. Si no tiene archivo, intenta usar uno precargado"""
+        """Reproduce efecto de sonido"""
         try:
-            # Si el sonido no está cargado y se proporciona ruta, cargarlo
             if name not in self.sound_effects and file_path:
                 sound = self.base.loader.loadSfx(file_path)
                 if sound:
                     self.sound_effects[name] = sound
             
-            # Reproducir el sonido si existe
             if name in self.sound_effects:
                 sound = self.sound_effects[name]
                 if sound:
                     sound.setVolume(volume)
                     sound.play()
-        except Exception as e:
-            print(f"❌ Error al reproducir sonido {name}: {e}")
+        except Exception:
+            pass
     
     def preload_sound(self, name, file_path):
-        """Precarga un sonido para uso posterior"""
+        """Precarga sonido"""
         try:
             if name not in self.sound_effects:
                 sound = self.base.loader.loadSfx(file_path)

@@ -3,8 +3,8 @@ ScoresScreen - Pantalla para ver historial de puntuaciones y ranking
 """
 
 from direct.gui.OnscreenText import OnscreenText
-from direct.gui.DirectGui import DirectButton
-from panda3d.core import TextNode, Vec4
+from direct.gui.DirectGui import DirectButton, DirectFrame
+from panda3d.core import TextNode, Vec4, CardMaker, TransparencyAttrib
 
 
 class ScoresScreen:
@@ -13,86 +13,165 @@ class ScoresScreen:
         self.user_manager = user_manager
         self.back_callback = back_callback
         
-        # Fondo
-        self.base.setBackgroundColor(Vec4(0.05, 0.05, 0.15, 1))
+        self.create_background()
         
-        # Título
         self.title = OnscreenText(
             text="PUNTUACIONES",
-            pos=(0, 0.8), scale=0.12,
-            fg=(0.6, 0.9, 1.0, 1),
+            pos=(0, 0.85), scale=0.14,
+            fg=(1, 0.9, 0.3, 1),
             shadow=(0, 0, 0, 1),
             align=TextNode.ACenter
         )
         
-        # Usuario actual
         current_user = user_manager.get_current_user()
         self.user_text = OnscreenText(
             text=f"Jugador: {current_user}",
-            pos=(0, 0.65), scale=0.07,
-            fg=(1, 1, 0.5, 1),
+            pos=(0, 0.7), scale=0.08,
+            fg=(0.3, 1, 0.3, 1),
+            shadow=(0, 0, 0, 0.8),
             align=TextNode.ACenter
         )
         
-        # Estadísticas personales
+        # Panel izquierdo - Estadísticas personales
+        self.left_panel = DirectFrame(
+            frameColor=(0.1, 0.15, 0.25, 0.9),
+            frameSize=(-0.32, 0.32, -0.48, 0.48),
+            pos=(-0.7, 0, -0.05)
+        )
+        
         stats = user_manager.get_user_stats()
-        stats_text = (
-            f"═══ TUS ESTADÍSTICAS ═══\n\n"
-            f"Mejor Puntuación: {stats['best_score']}\n"
-            f"Partidas Jugadas: {stats['total_games']}\n"
-            f"Promedio: {stats['average_score']}\n"
-            f"Tiempo Total: {stats['total_time'] // 60} min"
+        stats_title = OnscreenText(
+            text="ESTADÍSTICAS",
+            pos=(0, 0.38), scale=0.055,
+            fg=(0.6, 0.9, 1.0, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
         )
         
-        self.stats_text = OnscreenText(
-            text=stats_text,
-            pos=(-0.6, 0.35), scale=0.05,
-            fg=(0.7, 1, 0.7, 1),
-            align=TextNode.ALeft
+        OnscreenText(
+            text=f"Mejor Puntuación",
+            pos=(0, 0.22), scale=0.042,
+            fg=(0.7, 0.7, 0.7, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
+        )
+        OnscreenText(
+            text=f"{stats['best_score']}",
+            pos=(0, 0.13), scale=0.06,
+            fg=(1, 1, 0.3, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
         )
         
-        # Top 5 puntuaciones personales
+        OnscreenText(
+            text=f"Partidas Jugadas",
+            pos=(0, -0.02), scale=0.042,
+            fg=(0.7, 0.7, 0.7, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
+        )
+        OnscreenText(
+            text=f"{stats['total_games']}",
+            pos=(0, -0.11), scale=0.06,
+            fg=(0.3, 1, 0.3, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
+        )
+        
+        OnscreenText(
+            text=f"Promedio",
+            pos=(0, -0.26), scale=0.042,
+            fg=(0.7, 0.7, 0.7, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
+        )
+        OnscreenText(
+            text=f"{stats['average_score']}",
+            pos=(0, -0.35), scale=0.06,
+            fg=(0.3, 0.8, 1, 1),
+            align=TextNode.ACenter,
+            parent=self.left_panel
+        )
+        
+        # Panel central - Mejores personales
+        self.center_panel = DirectFrame(
+            frameColor=(0.15, 0.1, 0.25, 0.9),
+            frameSize=(-0.32, 0.32, -0.48, 0.48),
+            pos=(0, 0, -0.05)
+        )
+        
+        personal_title = OnscreenText(
+            text="MIS MEJORES 5",
+            pos=(0, 0.38), scale=0.055,
+            fg=(1, 0.9, 0.3, 1),
+            align=TextNode.ACenter,
+            parent=self.center_panel
+        )
+        
         user_scores = user_manager.get_user_scores(limit=5)
-        personal_scores_text = "═══ TUS MEJORES 5 ═══\n\n"
         
         if user_scores:
+            y_pos = 0.2
             for i, score in enumerate(user_scores, 1):
-                date_short = score['date'].split()[0]  # Solo la fecha
-                personal_scores_text += f"{i}. {score['score']} pts - {date_short}\n"
+                date_short = score['date'].split()[0]
+                OnscreenText(
+                    text=f"{i}. {score['score']} pts - {date_short}",
+                    pos=(0, y_pos), scale=0.045,
+                    fg=(0.9, 0.9, 0.9, 1),
+                    align=TextNode.ACenter,
+                    parent=self.center_panel
+                )
+                y_pos -= 0.13
         else:
-            personal_scores_text += "Aún no has jugado"
+            OnscreenText(
+                text="Sin partidas",
+                pos=(0, 0), scale=0.05,
+                fg=(0.7, 0.7, 0.7, 1),
+                align=TextNode.ACenter,
+                parent=self.center_panel
+            )
         
-        self.personal_scores = OnscreenText(
-            text=personal_scores_text,
-            pos=(-0.6, 0.0), scale=0.045,
-            fg=(0.9, 0.9, 0.9, 1),
-            align=TextNode.ALeft
+        # Panel derecho - Ranking global
+        self.right_panel = DirectFrame(
+            frameColor=(0.1, 0.2, 0.15, 0.9),
+            frameSize=(-0.32, 0.32, -0.48, 0.48),
+            pos=(0.7, 0, -0.05)
         )
         
-        # Ranking global
+        ranking_title = OnscreenText(
+            text="TOP 10 GLOBAL",
+            pos=(0, 0.38), scale=0.055,
+            fg=(0.3, 1, 0.5, 1),
+            align=TextNode.ACenter,
+            parent=self.right_panel
+        )
+        
         global_scores = user_manager.get_global_highscores(limit=10)
-        ranking_text = "═══ TOP 10 GLOBAL ═══\n\n"
         
         if global_scores:
-            for i, entry in enumerate(global_scores, 1):
+            y_pos = 0.22
+            for i, entry in enumerate(global_scores[:8], 1):
                 user = entry['username']
                 score = entry['score']
-                # Destacar al usuario actual
-                if user == current_user:
-                    ranking_text += f"→ {i}. {user}: {score} pts ←\n"
-                else:
-                    ranking_text += f"  {i}. {user}: {score} pts\n"
+                color = (1, 1, 0.3, 1) if user == current_user else (0.9, 0.9, 0.9, 1)
+                prefix = "→ " if user == current_user else ""
+                OnscreenText(
+                    text=f"{prefix}{i}. {user}: {score}",
+                    pos=(0, y_pos), scale=0.042,
+                    fg=color,
+                    align=TextNode.ACenter,
+                    parent=self.right_panel
+                )
+                y_pos -= 0.09
         else:
-            ranking_text += "No hay puntuaciones aún"
+            OnscreenText(
+                text="Sin datos",
+                pos=(0, 0), scale=0.05,
+                fg=(0.7, 0.7, 0.7, 1),
+                align=TextNode.ACenter,
+                parent=self.right_panel
+            )
         
-        self.ranking_text = OnscreenText(
-            text=ranking_text,
-            pos=(0.6, 0.35), scale=0.045,
-            fg=(1, 0.9, 0.5, 1),
-            align=TextNode.ALeft
-        )
-        
-        # Botón Volver
         self.back_button = DirectButton(
             text="VOLVER",
             scale=0.07,
@@ -115,6 +194,23 @@ class ScoresScreen:
         self.base.accept('escape', self.on_back_click)
         self.base.accept('q', self.on_back_click)
     
+    def create_background(self):
+        """Crea fondo de puntuaciones"""
+        cm = CardMaker('scores_background')
+        cm.setFrame(-2, 2, -1.5, 1.5)
+        self.background = self.base.aspect2d.attachNewNode(cm.generate())
+        self.background.setScale(2.5)
+        self.background.setPos(0, 0, 0)
+        
+        try:
+            tex = self.base.loader.loadTexture("fondo_main.png")
+            self.background.setTexture(tex)
+            self.background.setTransparency(TransparencyAttrib.MAlpha)
+        except:
+            self.base.setBackgroundColor(Vec4(0.05, 0.05, 0.15, 1))
+        
+        self.background.setBin('background', 0)
+    
     def on_back_click(self):
         """Volver al menú principal"""
         self.hide()
@@ -124,11 +220,13 @@ class ScoresScreen:
         """Ocultar la pantalla"""
         self.title.destroy()
         self.user_text.destroy()
-        self.stats_text.destroy()
-        self.personal_scores.destroy()
-        self.ranking_text.destroy()
+        self.left_panel.destroy()
+        self.center_panel.destroy()
+        self.right_panel.destroy()
         self.back_button.destroy()
         self.instructions.destroy()
+        if hasattr(self, 'background'):
+            self.background.removeNode()
         
         self.base.ignore('escape')
         self.base.ignore('q')

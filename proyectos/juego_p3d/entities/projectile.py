@@ -23,37 +23,23 @@ class Projectile:
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             image_path = os.path.join(project_dir, "projectile.png")
 
-            print(f"📍 [Projectile] Ruta del proyecto: {project_dir}")
-            print(f"📍 [Projectile] Intentando cargar imagen desde: {image_path}")
-            print(f"📍 [Projectile] ¿Existe el archivo? {os.path.exists(image_path)}")
-
             if os.path.exists(image_path):
                 panda_filename = Filename.fromOsSpecific(image_path)
 
                 try:
                     tex = base.loader.loadTexture(panda_filename)
-                    print(f"📍 [Projectile] loader.loadTexture: {tex}")
-                except Exception as e1:
-                    print(f"⚠️  loader.loadTexture falló: {e1}, intentando Texture.read()...")
+                except Exception:
                     tex = PandaTexture()
-                    if tex.read(panda_filename):
-                        print(f"📍 [Projectile] Texture.read() exitoso")
-                    else:
-                        raise Exception("Texture.read() también falló")
-
-                print(f"📍 [Projectile] Dimensiones de textura: {tex.getXSize()}x{tex.getYSize()}")
+                    if not tex.read(panda_filename):
+                        raise Exception("No se pudo cargar textura")
 
                 self.node.setTexture(tex)
                 self.node.setTransparency(TransparencyAttrib.MAlpha)
                 self.node.setColor(1, 1, 1, 1)
-                print("✅ [Projectile] Imagen del proyectil cargada exitosamente!")
             else:
-                print(f"❌ [Projectile] Imagen no encontrada en: {image_path}")
                 self.node.setColor(1.0, 0.4, 0.2, 1.0)
         except Exception as e:
-            import traceback
-            print(f"❌ [Projectile] Error cargando imagen: {e}")
-            traceback.print_exc()
+            print(f"Error cargando imagen: {e}")
             self.node.setColor(1.0, 0.4, 0.2, 1.0)
 
         self.node.setBillboardPointEye()

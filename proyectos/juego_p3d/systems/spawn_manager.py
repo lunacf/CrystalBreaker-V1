@@ -170,7 +170,7 @@ class SpawnManager:
                     self._create_pillar(x, spawn_y + random.uniform(0, 5), z)
                     
     def _create_column(self, x, y, height):
-        """Crear una columna vertical"""
+        """Crea una columna vertical"""
         cm = CardMaker('column')
         cm.setFrame(-0.3, 0.3, 0, height)
         column = self.base.render.attachNewNode(cm.generate())
@@ -180,7 +180,7 @@ class SpawnManager:
         self.obstacles.append(column)
 
     def _create_beam(self, y, z):
-        """Crear una viga horizontal"""
+        """Crea una viga horizontal"""
         cm = CardMaker('beam')
         cm.setFrame(-8, 8, -0.3, 0.3)
         beam = self.base.render.attachNewNode(cm.generate())
@@ -190,7 +190,7 @@ class SpawnManager:
         self.obstacles.append(beam)
 
     def _create_arch(self, y):
-        """Crear un arco decorativo"""
+        """Crea un arco decorativo"""
         for x in [-5, 5]:
             cm = CardMaker('arch_pillar')
             cm.setFrame(-0.4, 0.4, 0, 4)
@@ -209,7 +209,7 @@ class SpawnManager:
         self.obstacles.append(top)
 
     def _create_pillar(self, x, y, z):
-        """Crear un pilar decorativo pequeño"""
+        """Crea un pilar decorativo pequeño"""
         cm = CardMaker('pillar')
         cm.setFrame(-0.2, 0.2, -0.2, 0.2)
         pillar = self.base.render.attachNewNode(cm.generate())
@@ -219,7 +219,7 @@ class SpawnManager:
         self.obstacles.append(pillar)
         
     def cleanup_old_obstacles(self):
-        """Eliminar obstáculos que están muy atrás"""
+        """Elimina obstáculos que están muy atrás"""
         camera_y = self.base.camera.getY()
         obstacles_to_remove = []
 

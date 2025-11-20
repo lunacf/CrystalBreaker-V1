@@ -19,28 +19,23 @@ class UserManager:
         self.scores_file = "data/scores.csv"
         self.current_user = None
         
-        # Crear directorio data si no existe
         os.makedirs("data", exist_ok=True)
-        
-        # Inicializar archivos CSV si no existen
         self._init_csv_files()
     
     def _init_csv_files(self):
         """Inicializa los archivos CSV si no existen"""
-        # Archivo de usuarios
         if not os.path.exists(self.users_file):
             with open(self.users_file, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(['username', 'password_hash', 'created_at'])
         
-        # Archivo de puntuaciones
         if not os.path.exists(self.scores_file):
             with open(self.scores_file, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(['username', 'score', 'date', 'time_played'])
     
     def _hash_password(self, password):
-        """Hashea una contraseña para seguridad básica"""
+        """Genera hash SHA-256 de la contraseña"""
         return hashlib.sha256(password.encode()).hexdigest()
     
     def register_user(self, username, password):
@@ -48,7 +43,6 @@ class UserManager:
         Registra un nuevo usuario
         Retorna: (success: bool, message: str)
         """
-        # Validaciones
         if not username or not password:
             return False, "Usuario y contraseña no pueden estar vacíos"
         
@@ -58,11 +52,9 @@ class UserManager:
         if len(password) < 4:
             return False, "La contraseña debe tener al menos 4 caracteres"
         
-        # Verificar si el usuario ya existe
         if self._user_exists(username):
             return False, "El usuario ya existe"
         
-        # Guardar usuario
         password_hash = self._hash_password(password)
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -82,7 +74,6 @@ class UserManager:
         
         password_hash = self._hash_password(password)
         
-        # Buscar usuario en el CSV
         with open(self.users_file, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:

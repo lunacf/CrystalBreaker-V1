@@ -22,9 +22,9 @@ class Game:
 
         self.setup_scene()
         self.player = Player(self.base, self.cTrav, self.handler)
-        self.player.set_on_hit_barrier_callback(self.on_player_hit_barrier)
+        self.player.set_barrier_callback(self.on_player_hit_barrier)
         self.projectile_pool = ProjectilePool(self.base, self.cTrav, self.handler)
-        self.player.set_shoot_callback(self.shoot_with_ammo_check)
+        self.player.set_shoot_callback(self.shoot)
         self.crystals = []
         self.spawn_demo_crystals()
 
@@ -55,48 +55,37 @@ class Game:
 
         self.base.accept('escape', self.toggle_pause)
 
-        # Precargar sonidos del juego
-        self.preload_game_sounds()
+        self.load_sounds()
 
         self.base.taskMgr.add(self.update, "game-update-task")
 
     def setup_scene(self):
         from panda3d.core import Vec4
-        # Cielo celeste brillante
-        self.base.setBackgroundColor(Vec4(0.53, 0.81, 0.98, 1))  # Azul cielo
+        self.create_game_background()
 
         from panda3d.core import TransparencyAttrib
         
-        # Crear sol
         self.create_sun()
-        
-        # Crear nubes animadas
         self.clouds = []
         self.create_clouds()
 
-        # Camino/carretera principal
         cm = CardMaker('floor')
         cm.setFrame(-50, 50, -100, 100) 
         self.floor = self.base.render.attachNewNode(cm.generate())
         self.floor.setPos(0, 0, 0)
         self.floor.setHpr(0, -90, 0)
-        self.floor.setColor(0.3, 0.3, 0.50, 1) 
+        self.floor.setColor(0.3, 0.3, 0.50, 1)
         
-        
-        
-        # Líneas divisorias del camino (amarillas)
         self.road_lines = []
-        
-        for i in range(-10, 120, 8):  # Líneas cada 8 unidades
+        for i in range(-10, 120, 8):
             line = CardMaker(f'road_line_{i}')
-            line.setFrame(-0.15, 0.15, -2, 2)  # Línea discontinua
+            line.setFrame(-0.15, 0.15, -2, 2)
             line_node = self.base.render.attachNewNode(line.generate())
             line_node.setPos(0, i, 0.02)
             line_node.setHpr(0, -90, 0)
-            line_node.setColor(1, 0.9, 0.2, 1)  # Amarillo
+            line_node.setColor(1, 0.9, 0.2, 1)
             self.road_lines.append(line_node)
         
-        # Bordes del camino (líneas blancas continuas)
         left_edge = CardMaker('left_edge')
         left_edge.setFrame(-0.2, 0.2, -100, 100)
         self.left_edge = self.base.render.attachNewNode(left_edge.generate())
@@ -111,15 +100,10 @@ class Game:
         self.right_edge.setHpr(0, -90, 0)
         self.right_edge.setColor(0.9, 0.9, 0.9, 1)
 
-
-        # Paredes laterales con textura de ladrillo a la vista
         self.create_brick_wall('left')
         self.create_brick_wall('right')
-
-        # Sin techo para ver el cielo
         self.ceiling = None
         
-        # Guarda referencias a las luces para poder limpiarlas después
         ambient = AmbientLight("ambient")
         ambient.setColor((0.75, 0.78, 0.82, 1))
         self.ambient_np = self.base.render.attachNewNode(ambient)
@@ -142,13 +126,10 @@ class Game:
 
         self.setup_ui()
 
-        print("¡Juego iniciado! Deberías ver la ventana del juego.")
-
-    def preload_game_sounds(self):
-        """Precarga los efectos de sonido del juego"""
+    def load_sounds(self):
+        """Carga efectos de sonido"""
         import os
         if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
-            # Intentar cargar sonido de disparo si existe
             shoot_sound = os.path.join("sounds", "disparo.wav")
             if not os.path.exists(shoot_sound):
                 shoot_sound = os.path.join("sounds", "disparo.mp3")
@@ -156,9 +137,8 @@ class Game:
             if os.path.exists(shoot_sound):
                 self.base.sound_manager.preload_sound('shoot', shoot_sound)
             else:
-                print("⚠️ Archivo de sonido de disparo no encontrado (disparo.wav o disparo.mp3)")
+                print("Sonido de disparo no encontrado")
             
-            # Intentar cargar sonido de romper fantasma
             break_sound = os.path.join("sounds", "fantasma_romper.wav")
             if not os.path.exists(break_sound):
                 break_sound = os.path.join("sounds", "fantasma_romper.mp3")
@@ -166,30 +146,26 @@ class Game:
             if os.path.exists(break_sound):
                 self.base.sound_manager.preload_sound('crystal_break', break_sound)
             else:
-                print("⚠️ Archivo de sonido de romper fantasma no encontrado (fantasma_romper.wav o fantasma_romper.mp3)")
+                print("Sonido de romper fantasma no encontrado")
             
-            # Intentar cargar sonido de power-up
             powerup_sound = os.path.join("sounds", "powerup.wav")
             if not os.path.exists(powerup_sound):
                 powerup_sound = os.path.join("sounds", "powerup.mp3")
             
             if os.path.exists(powerup_sound):
                 self.base.sound_manager.preload_sound('powerup', powerup_sound)
-            else:
-                print("⚠️ Archivo de sonido de power-up no encontrado (powerup.wav o powerup.mp3)")
 
     def create_brick_wall(self, side):
-        """Crea una pared con textura de ladrillo a la vista simplificada"""
+        """Crea pared con textura de ladrillo simplificada"""
         x_pos = -8 if side == 'left' else 8
         hpr = 90 if side == 'left' else -90
         
-        # Pared base color ladrillo
         wall = CardMaker(f'{side}_wall')
         wall.setFrame(-100, 100, 0, 10)
         wall_node = self.base.render.attachNewNode(wall.generate())
         wall_node.setPos(x_pos, 0, 0)
         wall_node.setHpr(hpr, 0, 0)
-        wall_node.setColor(0.65, 0.35, 0.25, 1)  # Color ladrillo rojizo
+        wall_node.setColor(0.65, 0.35, 0.25, 1)
         
         if side == 'left':
             self.left_wall = wall_node
@@ -200,33 +176,31 @@ class Game:
         
         brick_list = self.left_wall_bricks if side == 'left' else self.right_wall_bricks
         
-        # Solo líneas horizontales cada 0.6 unidades (juntas entre filas de ladrillos)
         for z in range(0, 17):
             line = CardMaker(f'{side}_joint_{z}')
             line.setFrame(-100, 100, -0.04, 0.04)
             line_node = self.base.render.attachNewNode(line.generate())
             line_node.setPos(x_pos, 0, z * 0.6)
             line_node.setHpr(hpr, 0, 0)
-            line_node.setColor(0.4, 0.3, 0.25, 1)  # Mortero más oscuro
+            line_node.setColor(0.4, 0.3, 0.25, 1)
             brick_list.append(line_node)
     
     def create_sun(self):
-        """Crea un sol brillante en el cielo"""
+        """Crea sol brillante en el cielo"""
         from panda3d.core import TransparencyAttrib
         sun_cm = CardMaker('sun')
         sun_cm.setFrame(-3, 3, -3, 3)
         self.sun = self.base.render.attachNewNode(sun_cm.generate())
-        self.sun.setPos(15, 50, 25)  # Posición fija en el cielo
-        self.sun.setColor(1, 0.95, 0.3, 1)  # Amarillo brillante
+        self.sun.setPos(15, 50, 25)
+        self.sun.setColor(1, 0.95, 0.3, 1)
         self.sun.setBillboardPointEye()
         self.sun.setTransparency(TransparencyAttrib.MAlpha)
     
     def create_clouds(self):
-        """Crea nubes que se mueven por el cielo"""
+        """Crea nubes animadas en el cielo"""
         import random
         from panda3d.core import TransparencyAttrib
         
-        # Crear 8 nubes en diferentes posiciones
         for i in range(8):
             cloud = CardMaker(f'cloud_{i}')
             width = random.uniform(4, 7)
@@ -238,16 +212,20 @@ class Game:
             y_pos = random.uniform(-50, 150)
             z_pos = random.uniform(15, 30)
             cloud_node.setPos(x_pos, y_pos, z_pos)
-            cloud_node.setColor(1, 1, 1, 0.8)  # Blanco semi-transparente
+            cloud_node.setColor(1, 1, 1, 0.8)
             cloud_node.setBillboardPointEye()
             cloud_node.setTransparency(TransparencyAttrib.MAlpha)
             
-            # Velocidad aleatoria para cada nube
             cloud_speed = random.uniform(2, 5)
             self.clouds.append({'node': cloud_node, 'speed': cloud_speed, 'start_y': y_pos})
     
+    def create_game_background(self):
+        """Crea fondo del juego"""
+        from panda3d.core import Vec4
+        self.base.setBackgroundColor(Vec4(0.53, 0.81, 0.98, 1))
+    
     def setup_ui(self):
-        """Configura la interfaz de usuario con instrucciones"""
+        """Configura interfaz de usuario"""
         from direct.gui.OnscreenText import OnscreenText
 
         OnscreenText(text="Crystal Breaker Boca Version", pos=(0, 0.9), scale=0.08,
@@ -262,13 +240,11 @@ class Game:
         self.ammo_text = OnscreenText(text="Disparos: 20", pos=(-1.3, 0.65), scale=0.07,
                                      fg=(1, 0.5, 0, 1), align=0, mayChange=True)
         
-        # Mensaje temporal de power-up (inicialmente oculto)
         self.powerup_message = None
         self.powerup_message_task = None
 
-    def shoot_with_ammo_check(self, origin, direction):
-        """Disparar solo si hay munición disponible y el juego está activo"""
-        # No disparar si el juego está pausado o terminado
+    def shoot(self, origin, direction):
+        """Dispara si hay munición"""
         if self.game_paused or self.game_over:
             return
         
@@ -280,11 +256,8 @@ class Game:
                 self.trigger_game_over()
             else:
                 self.projectile_pool.spawn(origin, direction)
-                # Reproducir sonido de disparo
                 if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
                     self.base.sound_manager.play_sound('shoot', volume=0.3)
-        else:
-            print("¡Sin munición!")
 
     def spawn_demo_crystals(self):
         positions = [
@@ -306,11 +279,8 @@ class Game:
             self.last_powerup_spawn = camera_y
             spawn_y = camera_y + 40
             
-            # Posición aleatoria en X (evitar los bordes)
             x_pos = random.uniform(-6, 6)
             z_pos = random.uniform(1, 4)
-            
-            # Crear power-up con bonus aleatorio de munición
             ammo_bonus = random.choice([3, 5, 7])
             powerup = PowerUpObstacle(
                 self.base,
@@ -320,12 +290,9 @@ class Game:
                 ammo_bonus=ammo_bonus
             )
             
-            # Agregar al traverser para detectar colisiones
             self.cTrav.addCollider(powerup.collider, self.handler)
             
             self.powerups.append(powerup)
-            print(f"✨ Power-up generado en Y={spawn_y} con +{ammo_bonus} disparos")
-            print(f"   Collider mask: {powerup.collider.node().getIntoCollideMask()}")
 
     def create_column(self, x, y, height):
         """Elimina power-ups que están muy atrás"""
@@ -435,11 +402,10 @@ class Game:
                 self.crystals.append(c)
 
     def toggle_pause(self):
-        """Alternar pausa del juego"""
+        """Alterna pausa del juego"""
         self.game_paused = not self.game_paused
 
         if self.game_paused:
-            # Pausar música
             if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
                 if hasattr(self.base.sound_manager, 'music') and self.base.sound_manager.music:
                     self.base.sound_manager.music.stop()
@@ -447,23 +413,20 @@ class Game:
             from direct.gui.OnscreenText import OnscreenText
             from direct.gui.DirectGui import DirectFrame
             
-            # Fondo oscuro semi-transparente (pantalla completa)
             self.pause_overlay = OnscreenText(
                 text="", pos=(0, 0), scale=10,
                 fg=(0, 0, 0, 0.6), align=1,
                 mayChange=False
             )
             
-            # Panel/Ventana de pausa (recuadro)
             self.pause_panel = DirectFrame(
-                frameColor=(0.1, 0.15, 0.2, 0.95),  # Azul oscuro casi opaco
+                frameColor=(0.1, 0.15, 0.2, 0.95),
                 frameSize=(-1.2, 1.2, -0.6, 0.6),
                 pos=(0, 0, 0)
             )
             
-            # Borde del panel
             self.pause_border = DirectFrame(
-                frameColor=(0, 0.8, 1, 1),  # Celeste brillante
+                frameColor=(0, 0.8, 1, 1),
                 frameSize=(-1.25, 1.25, -0.65, 0.65),
                 pos=(0, 0, 0)
             )
@@ -471,7 +434,6 @@ class Game:
             self.pause_border.setBin('fixed', 0)
             self.pause_panel.setBin('fixed', 1)
             
-            # Título
             self.pause_title = OnscreenText(
                 text="JUEGO PAUSADO",
                 pos=(0, 0.35), scale=0.15,
@@ -480,7 +442,6 @@ class Game:
                 parent=self.pause_panel
             )
             
-            # Texto de instrucciones
             self.pause_text = OnscreenText(
                 text="ESC = Continuar\nQ = Salir al Menú",
                 pos=(0, -0.15), scale=0.09,
@@ -491,7 +452,6 @@ class Game:
             
             self.base.accept('q', self.quit_game)
         else:
-            # Reanudar música
             if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
                 if hasattr(self.base.sound_manager, 'music') and self.base.sound_manager.music:
                     self.base.sound_manager.music.play()
@@ -509,18 +469,17 @@ class Game:
             self.base.ignore('q')
 
     def quit_game(self):
-        """Volver al menú principal"""
+        """Vuelve al menú principal"""
         self.cleanup()
         self.base.return_to_menu()
 
     def cleanup(self):
-        """Limpiar recursos del juego"""
+        """Limpia recursos del juego"""
         for crystal in self.crystals:
             if hasattr(crystal, 'node') and crystal.node:
                 crystal.node.removeNode()
         self.crystals.clear()
 
-        # Limpiar power-ups
         for powerup in self.powerups:
             if powerup:
                 powerup.cleanup()
@@ -631,6 +590,13 @@ class Game:
 
         for crystal in self.crystals:
             if crystal.pos.getY() < camera_y - 50:
+                if not crystal.broken:
+                    self.ammo = max(0, self.ammo - 5)
+                    self.ammo_text.setText(f"Disparos: {self.ammo}")
+                    #print(f"Fantasma escapó: -5 disparos. Disparos: {self.ammo}")
+                    if self.ammo <= 0:
+                        self.trigger_game_over()
+                
                 crystal.node.removeNode()
                 crystals_to_remove.append(crystal)
 
@@ -655,15 +621,18 @@ class Game:
             print("Desactivando proyectil")
             proj.deactivate()
         if crystal and not crystal.broken:
-            print("Rompiendo cristal - ¡+10 puntos! +1 munición")
+            print(f"Rompiendo cristal - Disparos antes: {self.ammo}")
             crystal.break_apart()
             # Reproducir sonido de romper fantasma
             if hasattr(self.base, 'sound_manager') and self.base.sound_manager:
                 self.base.sound_manager.play_sound('crystal_break', volume=0.4)
             self.score += 10
             self.ammo += 1
+            print(f"Rompiendo cristal - Disparos después: {self.ammo}")
             self.score_text.setText(f"Puntos: {self.score}")
             self.ammo_text.setText(f"Disparos: {self.ammo}")
+        elif crystal and crystal.broken:
+            print("Cristal ya estaba roto, no suma disparos")
 
     def on_projectile_hit_barrier(self, entry):
         """Maneja colisión entre proyectil y barrier"""
@@ -741,7 +710,6 @@ class Game:
             align=2
         )
         
-        # Programar que desaparezca después de 2 segundos
         def hide_message(task):
             if self.powerup_message:
                 self.powerup_message.destroy()
@@ -774,27 +742,27 @@ class Game:
 
         self.base.camera.setY(self.base.camera, self.speed * dt)
 
-        # Mantener paredes laterales alineadas con la cámara
+        # Mantiene paredes laterales alineadas con la cámara
         camera_y = self.base.camera.getY()
         self.left_wall.setY(camera_y)
         self.right_wall.setY(camera_y)
         
-        # Mantener ladrillos alineados con las paredes
+        # Mantiene ladrillos alineados con las paredes
         for brick in self.left_wall_bricks:
             brick.setY(camera_y)
         for brick in self.right_wall_bricks:
             brick.setY(camera_y)
         
-        # Mantener el piso/camino alineado con la cámara
+        # Mantiene el piso/camino alineado con la cámara
         self.floor.setY(camera_y)
         self.left_edge.setY(camera_y)
         self.right_edge.setY(camera_y)
         
-        # Animar las líneas del camino para efecto de movimiento
+        # Anima las líneas del camino para efecto de movimiento
         for line in self.road_lines:
             line.setY(camera_y + (line.getY() - camera_y) % 16 - 8)
         
-        # Animar nubes
+        # Anima nubes
         for cloud_data in self.clouds:
             cloud = cloud_data['node']
             speed = cloud_data['speed']

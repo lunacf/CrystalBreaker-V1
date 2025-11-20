@@ -1,10 +1,11 @@
 """
 LoginScreen - Pantalla de login/registro con interfaz gráfica
+
 """
 
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectButton, DirectEntry
-from panda3d.core import TextNode, Vec4
+from panda3d.core import TextNode, Vec4, CardMaker, TransparencyAttrib
 
 
 class LoginScreen:
@@ -12,12 +13,10 @@ class LoginScreen:
         self.base = base
         self.user_manager = user_manager
         self.on_login_success = on_login_success
-        self.mode = "login"  # "login" o "register"
+        self.mode = "login"
         
-        # Fondo
-        self.base.setBackgroundColor(Vec4(0.05, 0.05, 0.15, 1))
+        self.create_background()
         
-        # Título
         self.title = OnscreenText(
             text="Crystal Breaker - CABJ Edition",
             pos=(0, 0.7), scale=0.12,
@@ -26,7 +25,6 @@ class LoginScreen:
             align=TextNode.ACenter
         )
         
-        # Subtítulo
         self.subtitle = OnscreenText(
             text="INICIAR SESIÓN",
             pos=(0, 0.5), scale=0.08,
@@ -34,7 +32,6 @@ class LoginScreen:
             align=TextNode.ACenter
         )
         
-        # Label Usuario
         self.username_label = OnscreenText(
             text="Usuario:",
             pos=(-0.4, 0.25), scale=0.06,
@@ -42,7 +39,6 @@ class LoginScreen:
             align=TextNode.ALeft
         )
         
-        # Campo de texto: Usuario
         self.username_entry = DirectEntry(
             text="",
             scale=0.06,
@@ -54,7 +50,6 @@ class LoginScreen:
             frameColor=(0.2, 0.2, 0.3, 0.8)
         )
         
-        # Label Contraseña
         self.password_label = OnscreenText(
             text="Contraseña:",
             pos=(-0.4, 0.0), scale=0.06,
@@ -62,7 +57,6 @@ class LoginScreen:
             align=TextNode.ALeft
         )
         
-        # Campo de texto: Contraseña
         self.password_entry = DirectEntry(
             text="",
             scale=0.06,
@@ -70,11 +64,10 @@ class LoginScreen:
             initialText="",
             numLines=1,
             width=12,
-            obscured=1,  # Ocultar contraseña con asteriscos
+            obscured=1,
             frameColor=(0.2, 0.2, 0.3, 0.8)
         )
         
-        # Botón Login
         self.login_button = DirectButton(
             text="INICIAR SESIÓN",
             scale=0.07,
@@ -85,7 +78,6 @@ class LoginScreen:
             relief=1
         )
         
-        # Botón Registrarse
         self.register_button = DirectButton(
             text="REGISTRARSE",
             scale=0.06,
@@ -96,7 +88,6 @@ class LoginScreen:
             relief=1
         )
         
-        # Mensaje de error/éxito
         self.message_text = OnscreenText(
             text="",
             pos=(0, -0.6), scale=0.05,
@@ -104,7 +95,6 @@ class LoginScreen:
             align=TextNode.ACenter
         )
         
-        # Instrucciones
         self.instructions = OnscreenText(
             text="Presiona ENTER para continuar",
             pos=(0, -0.8), scale=0.05,
@@ -112,9 +102,26 @@ class LoginScreen:
             align=TextNode.ACenter
         )
         
-        # Controles de teclado
         self.base.accept('enter', self.on_login_click)
         self.base.accept('tab', self.focus_password)
+    
+    def create_background(self):
+        """Crea el fondo de pantalla con imagen"""
+        cm = CardMaker('background')
+        cm.setFrame(-2, 2, -2, 2)
+        
+        self.background = self.base.render2d.attachNewNode(cm.generate())
+        self.background.setPos(0, 0, 0)
+        
+        try:
+            texture = self.base.loader.loadTexture("fondo_main.png")
+            self.background.setTexture(texture)
+            self.background.setTransparency(TransparencyAttrib.MAlpha)
+        except:
+            print("Advertencia: No se encontró 'fondo_login.png', usando color sólido")
+            self.background.setColor(0.05, 0.05, 0.15, 1)
+        
+        self.background.setBin('background', 0)
     
     def focus_password(self):
         """Cambia el foco al campo de contraseña"""
@@ -141,26 +148,26 @@ class LoginScreen:
         password = self.password_entry.get()
         
         if self.mode == "login":
-            # Intentar login
+            # Intenta login
             success, message = self.user_manager.login(username, password)
             
             if success:
                 self.message_text.setText(message)
                 self.message_text['fg'] = (0.3, 1, 0.3, 1)
-                # Pequeño delay antes de continuar
+                # Delay antes de entrar al menu 
                 self.base.taskMgr.doMethodLater(0.5, self.proceed_to_menu, 'proceed')
             else:
                 self.message_text.setText(message)
                 self.message_text['fg'] = (1, 0.3, 0.3, 1)
         
-        else:  # mode == "register"
-            # Intentar registro
+        else:
+            # Intenta registro
             success, message = self.user_manager.register_user(username, password)
             
             if success:
                 self.message_text.setText(message + "\nAhora puedes iniciar sesión")
                 self.message_text['fg'] = (0.3, 1, 0.3, 1)
-                # Cambiar automáticamente a modo login
+                # Cambia automáticamente a modo login
                 self.base.taskMgr.doMethodLater(1.5, self.switch_to_login, 'switch')
             else:
                 self.message_text.setText(message)
@@ -180,6 +187,7 @@ class LoginScreen:
     
     def hide(self):
         """Oculta la pantalla de login"""
+        self.background.removeNode()
         self.title.destroy()
         self.subtitle.destroy()
         self.username_label.destroy()
@@ -190,6 +198,6 @@ class LoginScreen:
         self.register_button.destroy()
         self.message_text.destroy()
         self.instructions.destroy()
-        
+
         self.base.ignore('enter')
         self.base.ignore('tab')

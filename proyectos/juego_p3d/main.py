@@ -17,30 +17,25 @@ class MyApp(ShowBase):
         self.win.requestProperties(props)
 
         self.game = None
-        self.game_start_time = 0  # Para tracking de tiempo jugado
-        
-        # Sistema de usuarios
+        self.game_start_time = 0
         self.user_manager = UserManager()
         
-        # Mostrar pantalla de login
         self.show_login_screen()
 
     def show_login_screen(self):
-        """Muestra la pantalla de login"""
+        """Muestra pantalla de login"""
         self.login_screen = LoginScreen(self, self.user_manager, self.show_main_menu)
     
     def show_main_menu(self):
-        """Dibujo menú principal"""
+        """Muestra menú principal"""
         self.menu = MainMenu(self, self.user_manager, self.start_game)
 
     def start_game(self):
-        """Inicio del juego"""
-        # Limpiar juego anterior si existe
+        """Inicia el juego"""
         if self.game:
             self.game.cleanup()
             self.game = None
 
-        # Registrar tiempo de inicio
         self.game_start_time = time.time()
 
         if not self.sound_manager:
@@ -52,14 +47,10 @@ class MyApp(ShowBase):
         self.game = Game(self)
 
     def show_game_over(self, score):
-        """Dibujo pantalla de game over"""
-        # Calcular tiempo jugado
+        """Muestra pantalla de game over"""
         time_played = int(time.time() - self.game_start_time)
-        
-        # Guardar puntuación
         self.user_manager.save_score(score, time_played)
         
-        # Mostrar pantalla de game over
         self.game_over_screen = GameOverScreen(
             self, 
             score, 
@@ -68,11 +59,11 @@ class MyApp(ShowBase):
         )
 
     def restart_game(self):
-        """Reiniciar el juego"""
+        """Reinicia el juego"""
         self.start_game()
 
     def return_to_menu(self):
-        """Volver al menú principal después de presionar Q en el juego"""
+        """Vuelve al menú principal"""
         if hasattr(self, 'game') and self.game:
             self.game = None
         self.show_main_menu()
