@@ -1,11 +1,11 @@
 from direct.task import Task
 from panda3d.core import Vec3, Point3, AmbientLight, DirectionalLight, CardMaker, CollisionTraverser, CollisionHandlerEvent
 from direct.showbase.DirectObject import DirectObject
-from entities.player import Player
-from entities.projectile import ProjectilePool
-from entities.crystal import Crystal
-from entities.barrier import BreakableBarrier
-from entities.powerup import PowerUpObstacle
+from src.entities.player import Player
+from src.entities.projectile import ProjectilePool
+from src.entities.crystal import Crystal
+from src.entities.barrier import BreakableBarrier
+from src.entities.powerup import PowerUpObstacle
 
 class Game:
     def __init__(self, base):
@@ -590,13 +590,6 @@ class Game:
 
         for crystal in self.crystals:
             if crystal.pos.getY() < camera_y - 50:
-                if not crystal.broken:
-                    self.ammo = max(0, self.ammo - 5)
-                    self.ammo_text.setText(f"Disparos: {self.ammo}")
-                    #print(f"Fantasma escapó: -5 disparos. Disparos: {self.ammo}")
-                    if self.ammo <= 0:
-                        self.trigger_game_over()
-                
                 crystal.node.removeNode()
                 crystals_to_remove.append(crystal)
 
